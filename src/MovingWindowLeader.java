@@ -7,7 +7,7 @@ import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
-
+import java.util.ArrayList;
 /**
  * A very simple leader implementation that only generates random prices
  * @author Xin
@@ -22,6 +22,7 @@ final class MovingWindowLeader extends PlayerImpl {
 	private long startTime;
 	private float a0;
 	private float a1;
+	private ArrayList<Record> records;
 	/**
 	 * You may want to delete this method if you don't want to do any
 	 * initialization
@@ -40,16 +41,33 @@ final class MovingWindowLeader extends PlayerImpl {
 		cumulativeTime = 0;
 		m_platformStub.log(m_type, "Starting simulation.");
 
+		records = new ArrayList<Record>(130);
+
 		if (shouldTime) {
 			long endTime = System.currentTimeMillis();
 			long timeElapsed = endTime - startTime;
 			cumulativeTime += timeElapsed;
 		}
+
+		for (int i = 1; i <= 100; i++) {
+			Record record = m_platformStub.query(m_type, i);
+			records.add(record);
+		}
+	}
+
+	public Record getRecord(int index) {
+		return records.get(index);
+	}
+
+	public Object[] getRecordArray() {
+		return records.toArray();
 	}
 
 	private MovingWindowLeader() throws RemoteException, NotBoundException {
 		super(PlayerType.LEADER, "Simple Leader");
 	}
+
+
 
 	@Override
 	public void goodbye() throws RemoteException {
@@ -77,6 +95,8 @@ final class MovingWindowLeader extends PlayerImpl {
 			calculateProfit(p_date - 1);
 			t = p_date - windowSize - 1;
 			T = p_date - 1;
+			Record record = m_platformStub.query(m_type, p_date - 1);
+			records.add(record);
 		}
 		else {
 			// Perform linear regression on all 100 historical records
@@ -91,7 +111,7 @@ final class MovingWindowLeader extends PlayerImpl {
 
 		a0 = (float) (sumSquareX * sumY - sumX * sumXTimesY)
 			/ (float) (T * sumSquareX - Math.pow(sumX, 2) );
-			
+
 		a1 = (float) (T * sumXTimesY - sumX * sumY) 
 			/ (float) (T * sumSquareX - Math.pow(sumX, 2));
 
@@ -137,8 +157,9 @@ final class MovingWindowLeader extends PlayerImpl {
 	*/
 	private float sumX(int t, int T) throws RemoteException {
 	  float sum = 0f;
-	  for (int i = t; i <= T; i++) {
-	  	Record record = m_platformStub.query(m_type, i);
+	  Object[] recordsArray = getRecordArray();
+	  for (int i = t - 1; i < T; i++) {
+	  	Record record = (Record) recordsArray[i];
 	    sum += record.m_leaderPrice;
 	  }
 	  return sum;
@@ -150,8 +171,9 @@ final class MovingWindowLeader extends PlayerImpl {
 	*/
 	private float sumY(int t, int T) throws RemoteException {
 	  float sum = 0f;
-	  for (int i = t; i <= T; i++) {
-	  	Record record = m_platformStub.query(m_type, i);
+	  Object[] recordsArray = getRecordArray();
+	  for (int i = t - 1; i < T; i++) {
+	    Record record = (Record) recordsArray[i];
 	    sum += record.m_followerPrice;
 	  }
 	  return sum;
@@ -163,8 +185,9 @@ final class MovingWindowLeader extends PlayerImpl {
 	*/
 	private float sumSquareX(int t, int T) throws RemoteException {
 	  float sum = 0f;
-	  for (int i = t; i <= T; i++) {
-	  	Record record = m_platformStub.query(m_type, i);
+	  Object[] recordsArray = getRecordArray();
+	  for (int i = t - 1; i < T; i++) {
+	  	Record record = (Record) recordsArray[i];
 	    sum += Math.pow(record.m_leaderPrice, 2);
 	  }
 	  return sum;
@@ -176,9 +199,11 @@ final class MovingWindowLeader extends PlayerImpl {
 	*/
 	private float sumXTimesY(int t, int T) throws RemoteException {
 	  float sum = 0f;
-	  for (int i = t; i <= T; i++) {
-	    Record record = m_platformStub.query(m_type, i);
-	    sum += record.m_leaderPrice * record.m_followerPrice;
+	  Object[] recordsArray = getRecordArray();
+	  for (int i = t - 1; i < T; i++) {
+	  	Record record = (Record) recordsArray[i];
+	    sum += record.m_leaderPrice 
+    				  * record.m_followerPrice;
 	  }
 	  return sum;
   }	
