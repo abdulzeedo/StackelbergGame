@@ -17,7 +17,9 @@ final class MovingWindowLeader extends PlayerImpl {
 	private float totalProfit;
 	private int p_steps;
 	private int windowSize = 100;
-	private long startTime = 0;
+	private boolean shouldTime = true;
+	private long cumulativeTime;
+	private long startTime;
 	private float a0;
 	private float a1;
 	/**
@@ -28,19 +30,26 @@ final class MovingWindowLeader extends PlayerImpl {
 	 * thrown by this method
 	 */
 	@Override
-	public void startSimulation(int p_steps)
-		throws RemoteException
-	{
+	public void startSimulation(int p_steps) throws RemoteException {
+		if (shouldTime) {
+			startTime = System.currentTimeMillis();
+		}
+
 		this.p_steps = p_steps;
 		totalProfit = 0;
+		cumulativeTime = 0;
 		m_platformStub.log(m_type, "Starting simulation.");
-
-		startTime = System.currentTimeMillis();		
 
 		// Perform linear regression on all 100 historical records
 		this.a0 = followerReactionFunctionParamA0(1, 100);
 		this.a1 = followerReactionFunctionParamA1(1, 100);
 		m_platformStub.log(m_type, "a0: " + this.a0 + " a1: " + this.a1);
+
+		if (shouldTime) {
+			long endTime = System.currentTimeMillis();
+			long timeElapsed = endTime - startTime;
+			cumulativeTime += timeElapsed;
+		}
 	}
 
 	private MovingWindowLeader() throws RemoteException, NotBoundException {
@@ -59,6 +68,11 @@ final class MovingWindowLeader extends PlayerImpl {
 	 */
 	@Override
 	public void proceedNewDay(int p_date) throws RemoteException {
+
+		if (shouldTime) {
+			startTime = System.currentTimeMillis();
+		}
+
 		// Calculate profit of the previous day
 		windowSize = p_date - 2;
 		float a0 = 0, a1 = 0;
@@ -75,21 +89,27 @@ final class MovingWindowLeader extends PlayerImpl {
 		}
 		m_platformStub.log(m_type, "a0: " + a0 + " a1: " + a1);
 		m_platformStub.publishPrice(m_type, leaderBestStrategy(a0, a1));
+
+		if (shouldTime) {
+			long endTime = System.currentTimeMillis();
+			long timeElapsed = endTime - startTime;
+			cumulativeTime += timeElapsed;
+		}
 	}
 
 	// Perform all calculation related to regression here
 	// R(u_l) = a_0 + a_1 * u_L
 	private float followerReactionFunctionParamA0(int t, int T) throws RemoteException {
 		float a0 = (float) (sumSquareX(t, T) * sumY(t, T) - sumX(t, T) * sumXTimesY(t, T))
-				      / (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2) );
+			/ (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2) );
 		return a0;
 	}
 
 	// Perform all calculation related to regression here
 	// R(u_l) = a_0 + a_1 * u_L
 	private float followerReactionFunctionParamA1(int t, int T) throws RemoteException {
-  	float a1 = (float) (T * sumXTimesY(t, T) - sumX(t, T) * sumY(t, T)) 
-  						 / (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2)); 
+		float a1 = (float) (T * sumXTimesY(t, T) - sumX(t, T) * sumY(t, T)) 
+			/ (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2)); 
 		return a1;
 	}
 
@@ -193,10 +213,7 @@ final class MovingWindowLeader extends PlayerImpl {
 		// Calculate last day's profit
 		calculateProfit(100 + p_steps);
 		m_platformStub.log(m_type, "Cumulative profit: " + totalProfit);
-		long endTime = System.currentTimeMillis();
-		long timeElapsed = endTime - startTime;
-
-		m_platformStub.log(m_type, "Time Elapsed: " + timeElapsed);
+		m_platformStub.log(m_type, "Time Elapsed: " + cumulativeTime);
 	}
 }
 
