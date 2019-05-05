@@ -15,7 +15,7 @@ final class MovingWindowLeader extends PlayerImpl {
 
 	private float totalProfit;
 	private int p_steps;
-	private final int windowSize = 100;
+	private int windowSize = 100;
 	private float a0;
 	private float a1;
 	/**
@@ -56,9 +56,10 @@ final class MovingWindowLeader extends PlayerImpl {
 	@Override
 	public void proceedNewDay(int p_date) throws RemoteException {
 		// Calculate profit of the previous day
-		calculateProfit(p_date - 1);
+		windowSize = p_date - 2;
 		float a0 = 0, a1 = 0;
 		if (p_date > 101) {
+			calculateProfit(p_date - 1);
 			a0 = followerReactionFunctionParamA0(p_date - windowSize - 1, 
 																					 p_date - 1);
 			a1 = followerReactionFunctionParamA1(p_date - windowSize - 1, 
