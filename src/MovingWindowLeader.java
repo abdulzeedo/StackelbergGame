@@ -40,11 +40,6 @@ final class MovingWindowLeader extends PlayerImpl {
 		cumulativeTime = 0;
 		m_platformStub.log(m_type, "Starting simulation.");
 
-		// Perform linear regression on all 100 historical records
-		this.a0 = followerReactionFunctionParamA0(1, 100);
-		this.a1 = followerReactionFunctionParamA1(1, 100);
-		m_platformStub.log(m_type, "a0: " + this.a0 + " a1: " + this.a1);
-
 		if (shouldTime) {
 			long endTime = System.currentTimeMillis();
 			long timeElapsed = endTime - startTime;
@@ -76,17 +71,30 @@ final class MovingWindowLeader extends PlayerImpl {
 		// Calculate profit of the previous day
 		windowSize = p_date - 2;
 		float a0 = 0, a1 = 0;
+		int t = 0;
+		int T = 0;
 		if (p_date > 101) {
 			calculateProfit(p_date - 1);
-			a0 = followerReactionFunctionParamA0(p_date - windowSize - 1, 
-																					 p_date - 1);
-			a1 = followerReactionFunctionParamA1(p_date - windowSize - 1, 
-																					 p_date - 1);
+			t = p_date - windowSize - 1;
+			T = p_date - 1;
 		}
 		else {
-			a0 = this.a0;
-			a1 = this.a1;
+			// Perform linear regression on all 100 historical records
+			t = 1;
+			T = 100;
 		}
+
+		float sumX = sumX(t, T);
+		float sumY = sumY(t, T);
+		float sumSquareX = sumSquareX(t, T);
+		float sumXTimesY = sumXTimesY(t, T);
+
+		a0 = (float) (sumSquareX * sumY - sumX * sumXTimesY)
+			/ (float) (T * sumSquareX - Math.pow(sumX, 2) );
+			
+		a1 = (float) (T * sumXTimesY - sumX * sumY) 
+			/ (float) (T * sumSquareX - Math.pow(sumX, 2));
+
 		m_platformStub.log(m_type, "a0: " + a0 + " a1: " + a1);
 		m_platformStub.publishPrice(m_type, leaderBestStrategy(a0, a1));
 
