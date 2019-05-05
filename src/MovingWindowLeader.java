@@ -6,6 +6,7 @@ import java.rmi.RemoteException;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A very simple leader implementation that only generates random prices
@@ -16,6 +17,7 @@ final class MovingWindowLeader extends PlayerImpl {
 	private float totalProfit;
 	private int p_steps;
 	private int windowSize = 100;
+	private long startTime = 0;
 	private float a0;
 	private float a1;
 	/**
@@ -32,6 +34,8 @@ final class MovingWindowLeader extends PlayerImpl {
 		this.p_steps = p_steps;
 		totalProfit = 0;
 		m_platformStub.log(m_type, "Starting simulation.");
+
+		startTime = System.currentTimeMillis();		
 
 		// Perform linear regression on all 100 historical records
 		this.a0 = followerReactionFunctionParamA0(1, 100);
@@ -189,6 +193,10 @@ final class MovingWindowLeader extends PlayerImpl {
 		// Calculate last day's profit
 		calculateProfit(100 + p_steps);
 		m_platformStub.log(m_type, "Cumulative profit: " + totalProfit);
+		long endTime = System.currentTimeMillis();
+		long timeElapsed = endTime - startTime;
+
+		m_platformStub.log(m_type, "Time Elapsed: " + timeElapsed);
 	}
 }
 
