@@ -15,6 +15,9 @@ final class MovingWindowLeader extends PlayerImpl {
 
 	private float totalProfit;
 	private int p_steps;
+	private final int windowSize = 100;
+	private float a0;
+	private float a1;
 	/**
 	 * You may want to delete this method if you don't want to do any
 	 * initialization
@@ -30,11 +33,11 @@ final class MovingWindowLeader extends PlayerImpl {
 		totalProfit = 0;
 		m_platformStub.log(m_type, "Starting simulation.");
 
+		// Perform linear regression on all 100 historical records
+		this.a0 = followerReactionFunctionParamA0(1, 100);
+		this.a1 = followerReactionFunctionParamA1(1, 100);
+		m_platformStub.log(m_type, "a0: " + this.a0 + " a1: " + this.a1);
 	}
-
-
-	/* The randomizer used to generate random price */
-	private final Random m_randomizer = new Random(System.currentTimeMillis());
 
 	private MovingWindowLeader() throws RemoteException, NotBoundException {
 		super(PlayerType.LEADER, "Simple Leader");
@@ -54,32 +57,98 @@ final class MovingWindowLeader extends PlayerImpl {
 	public void proceedNewDay(int p_date) throws RemoteException {
 		// Calculate profit of the previous day
 		calculateProfit(p_date - 1);
-
-		m_platformStub.publishPrice(m_type, genPrice(1.8f, 0.05f));
+		float a0 = 0, a1 = 0;
+		if (p_date > 101) {
+			a0 = followerReactionFunctionParamA0(p_date - windowSize - 1, 
+																					 p_date - 1);
+			a1 = followerReactionFunctionParamA1(p_date - windowSize - 1, 
+																					 p_date - 1);
+		}
+		else {
+			a0 = this.a0;
+			a1 = this.a1;
+		}
+		m_platformStub.log(m_type, "a0: " + a0 + " a1: " + a1);
+		m_platformStub.publishPrice(m_type, leaderBestStrategy(a0, a1));
 	}
 
 	// Perform all calculation related to regression here
 	// R(u_l) = a_0 + a_1 * u_L
-	private float followerReactionFunction() {
-		return 0f;
+	private float followerReactionFunctionParamA0(int t, int T) throws RemoteException {
+		float a0 = (float) (sumSquareX(t, T) * sumY(t, T) - sumX(t, T) * sumXTimesY(t, T))
+				      / (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2) );
+		return a0;
 	}
 
-	// Calculates leaders best strategy (price) by maximising its payoff function
-	// @param a1 The second parameter of follower's reaction function
-	private float LeaderBestStrategy(float a1) {
-			return 3/20 * a1 + 3/2;
+	// Perform all calculation related to regression here
+	// R(u_l) = a_0 + a_1 * u_L
+	private float followerReactionFunctionParamA1(int t, int T) throws RemoteException {
+  	float a1 = (float) (T * sumXTimesY(t, T) - sumX(t, T) * sumY(t, T)) 
+  						 / (float) (T * sumSquareX(t, T) - Math.pow(sumX(t, T), 2)); 
+		return a1;
 	}
 
-	/**
-	 * Generate a random price based Gaussian distribution. The mean is p_mean,
-	 * and the diversity is p_diversity
-	 * @param p_mean The mean of the Gaussian distribution
-	 * @param p_diversity The diversity of the Gaussian distribution
-	 * @return The generated price
-	 */
-	private float genPrice(final float p_mean, final float p_diversity) {
-		return (float) (p_mean + m_randomizer.nextGaussian() * p_diversity);
+
+	/** Calculates leaders best strategy (price) by maximising its payoff function
+	* @param a1 The second parameter of follower's reaction function
+	*/
+	private float leaderBestStrategy(float a0, float a1) {
+		return (float) (-3 - 0.3f * a0 + 0.3f * a1) / (float) (2 * 0.3f * a1 - 2);
+			// return (float) 3/20 * a1 + (float) 3/2;
 	}
+
+
+	/** Calculates the sum of all x(t) from t to T Σx(t)
+	*	@param t starting point
+	* @param T ending point
+	*/
+	private float sumX(int t, int T) throws RemoteException {
+	  float sum = 0f;
+	  for (int i = t; i <= T; i++) {
+	  	Record record = m_platformStub.query(m_type, i);
+	    sum += record.m_leaderPrice;
+	  }
+	  return sum;
+	}
+
+	/** Calculates the sum of all y(t) from t to T Σy(t)
+	*	@param t starting point
+	* @param T ending point
+	*/
+	private float sumY(int t, int T) throws RemoteException {
+	  float sum = 0f;
+	  for (int i = t; i <= T; i++) {
+	  	Record record = m_platformStub.query(m_type, i);
+	    sum += record.m_followerPrice;
+	  }
+	  return sum;
+	}
+
+	/** Calculates the sum of all (x(t))^2 from t to T Σ(x(t))^2
+	*	@param t starting point
+	* @param T ending point
+	*/
+	private float sumSquareX(int t, int T) throws RemoteException {
+	  float sum = 0f;
+	  for (int i = t; i <= T; i++) {
+	  	Record record = m_platformStub.query(m_type, i);
+	    sum += Math.pow(record.m_leaderPrice, 2);
+	  }
+	  return sum;
+	}
+
+	/** Calculates the sum of all x(t)*y(t) from t to T Σ {x(t) * y(t)}
+	*	@param t starting point
+	* @param T ending point
+	*/
+	private float sumXTimesY(int t, int T) throws RemoteException {
+	  float sum = 0f;
+	  for (int i = t; i <= T; i++) {
+	    Record record = m_platformStub.query(m_type, i);
+	    sum += record.m_leaderPrice * record.m_followerPrice;
+	  }
+	  return sum;
+  }	
 
 
 	private void calculateProfit(int previousDayDate) throws RemoteException{
